@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.core.exceptions import register_exception_handlers
 from app.database.session import async_engine, check_db_connection
 
 # Configure structured logging
@@ -67,6 +68,9 @@ def create_application() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Register domain exception handlers
+    register_exception_handlers(app)
 
     # Root informational endpoint
     @app.get("/", tags=["Root"])

@@ -11,9 +11,7 @@ from alembic import context
 sys.path.insert(0, dirname(dirname(abspath(__file__))))
 
 from app.core.config import settings
-from app.models.base import Base
-# When new models are created, import them here so alembic autogenerate detects them
-# e.g., import app.models.event # noqa
+from app.models import Base, Event  # noqa: F401
 
 # Alembic Config object
 config = context.config

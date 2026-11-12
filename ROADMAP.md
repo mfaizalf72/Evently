@@ -15,7 +15,7 @@ Status designations:
 | Version | Milestone | Description | Status |
 | :--- | :--- | :--- | :--- |
 | **V1** | **Project Initialization & Core Setup** | Empty workspace setup, clean architecture folder structure, virtual environment, FastAPI setup, PostgreSQL connection (asyncpg & psycopg), SQLAlchemy 2.0 configuration, Alembic setup, Pydantic v2 settings, health check endpoint, Pytest test runner, Git initialization. | **COMPLETED** |
-| **V2** | **Event Database Model & CRUD APIs** | Event SQLAlchemy model, repository pattern, service layer, Pydantic request/response schemas, Event CRUD endpoints (create, retrieve, list with pagination/filtering, update, delete), Alembic migration for events, unit & integration tests. | NOT STARTED |
+| **V2** | **Event Database Model & CRUD APIs** | Event SQLAlchemy model, repository pattern, service layer, Pydantic request/response schemas, Event CRUD endpoints (create, retrieve, list with pagination/filtering, update, delete), Alembic migration for events, unit & integration tests. | **COMPLETED** |
 
 ---
 
