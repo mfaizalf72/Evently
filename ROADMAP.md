@@ -23,8 +23,8 @@ Status designations:
 
 | Version | Milestone | Description | Status |
 | :--- | :--- | :--- | :--- |
-| **V3** | **User Authentication & Password Hashing** | User database model, Argon2/bcrypt password hashing, user registration, login endpoint, JWT token generation (access & refresh tokens). | NOT STARTED |
-| **V4** | **Role-Based Access Control (RBAC) & Ownership** | Roles (`ORGANIZER`, `CUSTOMER`, `ADMIN`), FastAPI dependency-based authorization guards, resource ownership checks (organizers can only modify their own events). | NOT STARTED |
+| **V3** | **User Authentication & Password Hashing** | User database model, Argon2/bcrypt password hashing, user registration, login endpoint, JWT token generation (access & refresh tokens). | **COMPLETED** |
+| **V4** | **Role-Based Access Control (RBAC) & Ownership** | Roles (`ORGANIZER`, `CUSTOMER`, `ADMIN`), FastAPI dependency-based authorization guards, resource ownership checks (organizers can only modify their own events). | **COMPLETED** |
 
 ---
 

@@ -33,6 +33,18 @@ class BusinessRuleViolationException(EventlyException):
         super().__init__(message=message, code=code, details=details)
 
 
+class AuthenticationException(EventlyException):
+    """Raised when authentication fails or credentials are invalid."""
+    def __init__(self, message: str = "Invalid credentials or token expired.", code: str = "AUTHENTICATION_FAILED", details: Optional[Any] = None):
+        super().__init__(message=message, code=code, details=details)
+
+
+class AuthorizationException(EventlyException):
+    """Raised when user lacks required permissions or role."""
+    def __init__(self, message: str = "You do not have permission to perform this action.", code: str = "FORBIDDEN", details: Optional[Any] = None):
+        super().__init__(message=message, code=code, details=details)
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """
     Registers custom exception handlers on the FastAPI application instance.
@@ -54,6 +66,33 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def business_rule_violation_handler(request: Request, exc: BusinessRuleViolationException):
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": {
+                    "code": exc.code,
+                    "message": exc.message,
+                    "details": exc.details,
+                }
+            },
+        )
+
+    @app.exception_handler(AuthenticationException)
+    async def authentication_exception_handler(request: Request, exc: AuthenticationException):
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            headers={"WWW-Authenticate": "Bearer"},
+            content={
+                "error": {
+                    "code": exc.code,
+                    "message": exc.message,
+                    "details": exc.details,
+                }
+            },
+        )
+
+    @app.exception_handler(AuthorizationException)
+    async def authorization_exception_handler(request: Request, exc: AuthorizationException):
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
             content={
                 "error": {
                     "code": exc.code,

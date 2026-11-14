@@ -71,6 +71,7 @@ class EventUpdate(BaseModel):
 class EventResponse(EventBase):
     """Schema for returning event details to clients."""
     id: uuid.UUID = Field(..., description="Unique event identifier")
+    organizer_id: Optional[uuid.UUID] = Field(None, description="Organizer user identifier")
     available_capacity: int = Field(..., ge=0, description="Seats currently available for booking")
     created_at: datetime = Field(..., description="Creation timestamp (UTC)")
     updated_at: datetime = Field(..., description="Last update timestamp (UTC)")

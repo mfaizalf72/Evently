@@ -5,11 +5,16 @@ Represents community events, workshops, and gatherings with database-level capac
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Integer, Numeric, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from typing import Optional, TYPE_CHECKING
+import uuid
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class Event(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -59,6 +64,20 @@ class Event(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         nullable=False,
         default=False,
         index=True,
+    )
+
+    # Ownership by Organizer
+    organizer_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+
+    organizer: Mapped[Optional["User"]] = relationship(
+        "User",
+        back_populates="events",
+        lazy="selectin",
     )
 
     __table_args__ = (

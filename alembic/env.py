@@ -11,7 +11,7 @@ from alembic import context
 sys.path.insert(0, dirname(dirname(abspath(__file__))))
 
 from app.core.config import settings
-from app.models import Base, Event  # noqa: F401
+from app.models import Base, Event, User  # noqa: F401
 
 # Alembic Config object
 config = context.config

@@ -1,16 +1,19 @@
 """
 Event API Endpoints
 RESTful routes for creating, listing, retrieving, updating, and deleting events.
+Protected mutations enforce Organizer role and resource ownership.
 """
 
-from typing import Annotated, Optional
+from typing import Optional
 import uuid
 from decimal import Decimal
 from datetime import datetime
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_organizer
 from app.database.session import get_db
+from app.models.user import User
 from app.schemas.event import (
     EventCreate,
     EventFilterParams,
@@ -32,13 +35,14 @@ def get_service(db: AsyncSession = Depends(get_db)) -> EventService:
     response_model=EventResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create New Event",
-    description="Registers a new event with total and available capacity initialized.",
+    description="Registers a new event. Requires Organizer or Admin privileges.",
 )
 async def create_event(
     payload: EventCreate,
+    current_user: User = Depends(get_current_organizer),
     service: EventService = Depends(get_service),
 ) -> EventResponse:
-    return await service.create_event(data=payload)
+    return await service.create_event(data=payload, organizer_id=current_user.id)
 
 
 @router.get(
@@ -93,24 +97,30 @@ async def get_event(
     response_model=EventResponse,
     status_code=status.HTTP_200_OK,
     summary="Update Event",
-    description="Updates event fields while preserving data integrity constraints.",
+    description="Updates event fields. Requires that the caller is the organizer of this event or an Admin.",
 )
 async def update_event(
     event_id: uuid.UUID,
     payload: EventUpdate,
+    current_user: User = Depends(get_current_organizer),
     service: EventService = Depends(get_service),
 ) -> EventResponse:
-    return await service.update_event(event_id=event_id, data=payload)
+    return await service.update_event(
+        event_id=event_id,
+        data=payload,
+        current_user=current_user,
+    )
 
 
 @router.delete(
     "/{event_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete Event",
-    description="Permanently removes an event provided no bookings have been made.",
+    description="Permanently removes an event. Requires event ownership and no booked tickets.",
 )
 async def delete_event(
     event_id: uuid.UUID,
+    current_user: User = Depends(get_current_organizer),
     service: EventService = Depends(get_service),
 ) -> None:
-    await service.delete_event(event_id=event_id)
+    await service.delete_event(event_id=event_id, current_user=current_user)

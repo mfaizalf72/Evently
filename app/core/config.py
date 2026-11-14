@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     TEST_DATABASE_URL: Optional[str] = None
     TEST_DATABASE_URL_SYNC: Optional[str] = None
 
+    # Security & JWT Configuration
+    SECRET_KEY: str = "evently_super_secure_jwt_secret_key_change_in_production_2026"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
     @computed_field
     @property
     def async_database_url(self) -> str:

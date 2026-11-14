@@ -1,6 +1,6 @@
 """
 Integration Tests for Event REST APIs
-Tests Event CRUD endpoints against real PostgreSQL database instances.
+Tests Event CRUD endpoints against real PostgreSQL database instances with Organizer privileges.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -13,7 +13,7 @@ from app.core.config import settings
 
 
 @pytest.mark.asyncio
-async def test_create_event_success(async_client: AsyncClient):
+async def test_create_event_success(organizer_client: AsyncClient):
     """
     Test creating a new event returns 201 Created and properly initializes available_capacity.
     """
@@ -31,7 +31,7 @@ async def test_create_event_success(async_client: AsyncClient):
         "is_published": True,
     }
 
-    response = await async_client.post(f"{settings.API_V1_STR}/events", json=payload)
+    response = await organizer_client.post(f"{settings.API_V1_STR}/events", json=payload)
     assert response.status_code == 201
     data = response.json()
 
@@ -46,7 +46,7 @@ async def test_create_event_success(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_create_event_validation_failure(async_client: AsyncClient):
+async def test_create_event_validation_failure(organizer_client: AsyncClient):
     """
     Test that invalid date ranges reject the request with HTTP 422 Unprocessable Entity.
     """
@@ -61,14 +61,14 @@ async def test_create_event_validation_failure(async_client: AsyncClient):
         "total_capacity": 10,
     }
 
-    response = await async_client.post(f"{settings.API_V1_STR}/events", json=payload)
+    response = await organizer_client.post(f"{settings.API_V1_STR}/events", json=payload)
     assert response.status_code == 422
     data = response.json()
     assert "detail" in data
 
 
 @pytest.mark.asyncio
-async def test_get_event_by_id_success(async_client: AsyncClient):
+async def test_get_event_by_id_success(organizer_client: AsyncClient, async_client: AsyncClient):
     """
     Test retrieving an existing event by UUID returns 200 OK.
     """
@@ -76,7 +76,7 @@ async def test_get_event_by_id_success(async_client: AsyncClient):
     end = (datetime.now(timezone.utc) + timedelta(days=2, hours=2)).isoformat()
 
     # Create an event first
-    create_resp = await async_client.post(
+    create_resp = await organizer_client.post(
         f"{settings.API_V1_STR}/events",
         json={
             "title": "GraphQL Workshop",
@@ -89,7 +89,7 @@ async def test_get_event_by_id_success(async_client: AsyncClient):
     )
     event_id = create_resp.json()["id"]
 
-    # Fetch event by id
+    # Public fetch event by id
     response = await async_client.get(f"{settings.API_V1_STR}/events/{event_id}")
     assert response.status_code == 200
     data = response.json()
@@ -111,14 +111,14 @@ async def test_get_event_not_found(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_list_events_pagination(async_client: AsyncClient):
+async def test_list_events_pagination(organizer_client: AsyncClient, async_client: AsyncClient):
     """
     Test listing events with page and page_size query parameters.
     """
     start = datetime.now(timezone.utc) + timedelta(days=1)
     # Create 3 events
     for i in range(3):
-        await async_client.post(
+        await organizer_client.post(
             f"{settings.API_V1_STR}/events",
             json={
                 "title": f"Batch Event {i}",
@@ -142,12 +142,12 @@ async def test_list_events_pagination(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_list_events_filtering(async_client: AsyncClient):
+async def test_list_events_filtering(organizer_client: AsyncClient, async_client: AsyncClient):
     """
     Test filtering events by title, publication status, and price range.
     """
     start = datetime.now(timezone.utc) + timedelta(days=3)
-    await async_client.post(
+    await organizer_client.post(
         f"{settings.API_V1_STR}/events",
         json={
             "title": "Rust Systems Programming",
@@ -174,12 +174,12 @@ async def test_list_events_filtering(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_update_event_success(async_client: AsyncClient):
+async def test_update_event_success(organizer_client: AsyncClient):
     """
     Test updating an event's title, price, and capacity.
     """
     start = datetime.now(timezone.utc) + timedelta(days=7)
-    create_resp = await async_client.post(
+    create_resp = await organizer_client.post(
         f"{settings.API_V1_STR}/events",
         json={
             "title": "Initial Title",
@@ -197,7 +197,7 @@ async def test_update_event_success(async_client: AsyncClient):
         "total_capacity": 50,
         "price": "15.00",
     }
-    response = await async_client.put(f"{settings.API_V1_STR}/events/{event_id}", json=update_payload)
+    response = await organizer_client.put(f"{settings.API_V1_STR}/events/{event_id}", json=update_payload)
     assert response.status_code == 200
     data = response.json()
     assert data["title"] == "Updated Title"
@@ -207,12 +207,12 @@ async def test_update_event_success(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_delete_event_success(async_client: AsyncClient):
+async def test_delete_event_success(organizer_client: AsyncClient, async_client: AsyncClient):
     """
     Test deleting an event returns 204 and the event is subsequently not found.
     """
     start = datetime.now(timezone.utc) + timedelta(days=4)
-    create_resp = await async_client.post(
+    create_resp = await organizer_client.post(
         f"{settings.API_V1_STR}/events",
         json={
             "title": "Temporary Event",
@@ -225,7 +225,7 @@ async def test_delete_event_success(async_client: AsyncClient):
     event_id = create_resp.json()["id"]
 
     # Delete event
-    delete_resp = await async_client.delete(f"{settings.API_V1_STR}/events/{event_id}")
+    delete_resp = await organizer_client.delete(f"{settings.API_V1_STR}/events/{event_id}")
     assert delete_resp.status_code == 204
 
     # Verify event is deleted

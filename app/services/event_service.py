@@ -1,6 +1,6 @@
 """
 Event Service Module
-Implements business rules, validation invariants, and orchestrates repository operations.
+Implements business rules, validation invariants, ownership verification, and orchestrates repository operations.
 """
 
 import math
@@ -8,8 +8,13 @@ from typing import Optional
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import BusinessRuleViolationException, EntityNotFoundException
+from app.core.exceptions import (
+    AuthorizationException,
+    BusinessRuleViolationException,
+    EntityNotFoundException,
+)
 from app.models.event import Event
+from app.models.user import User
 from app.repositories.event_repository import EventRepository
 from app.schemas.event import (
     EventCreate,
@@ -22,15 +27,20 @@ from app.schemas.event import (
 
 class EventService:
     """
-    Service class managing Event business logic and lifecycle operations.
+    Service class managing Event business logic, lifecycle operations, and ownership verification.
     """
     def __init__(self, db: AsyncSession):
         self.db = db
         self.repository = EventRepository(db=db)
 
-    async def create_event(self, data: EventCreate) -> EventResponse:
+    async def create_event(
+        self,
+        data: EventCreate,
+        organizer_id: Optional[uuid.UUID] = None,
+    ) -> EventResponse:
         """
-        Creates a new event with available_capacity initially equal to total_capacity.
+        Creates a new event with available_capacity initially equal to total_capacity
+        and binds it to the authenticated organizer.
         """
         event = Event(
             title=data.title,
@@ -42,6 +52,7 @@ class EventService:
             available_capacity=data.total_capacity,
             price=data.price,
             is_published=data.is_published,
+            organizer_id=organizer_id,
         )
 
         created_event = await self.repository.create(event)
@@ -72,17 +83,30 @@ class EventService:
             total_pages=total_pages,
         )
 
-    async def update_event(self, event_id: uuid.UUID, data: EventUpdate) -> EventResponse:
+    async def update_event(
+        self,
+        event_id: uuid.UUID,
+        data: EventUpdate,
+        current_user: Optional[User] = None,
+    ) -> EventResponse:
         """
-        Updates an existing event while enforcing date and capacity business invariants.
+        Updates an existing event while enforcing date, capacity invariants, and organizer ownership.
         """
         event = await self.repository.get_by_id(event_id)
         if not event:
             raise EntityNotFoundException(entity_name="Event", entity_id=event_id)
 
+        # Enforce organizer ownership if caller is authenticated
+        if current_user and current_user.role != "admin":
+            if event.organizer_id is not None and event.organizer_id != current_user.id:
+                raise AuthorizationException(
+                    message="You do not have permission to modify this event because you are not its organizer.",
+                    code="NOT_EVENT_OWNER",
+                )
+
         update_dict = data.model_dump(exclude_unset=True)
 
-        # Validate date consistency if only one date is being updated
+        # Validate date consistency if dates are updated
         new_start = update_dict.get("start_time", event.start_time)
         new_end = update_dict.get("end_time", event.end_time)
         if new_end <= new_start:
@@ -100,7 +124,6 @@ class EventService:
                     message=f"Cannot reduce total capacity to {new_total}. Already reserved seats: {booked_seats}.",
                     code="CAPACITY_BELOW_RESERVED",
                 )
-            # Recompute available capacity proportionally
             event.available_capacity = new_total - booked_seats
             event.total_capacity = new_total
 
@@ -113,13 +136,25 @@ class EventService:
         await self.db.commit()
         return EventResponse.model_validate(updated_event)
 
-    async def delete_event(self, event_id: uuid.UUID) -> None:
+    async def delete_event(
+        self,
+        event_id: uuid.UUID,
+        current_user: Optional[User] = None,
+    ) -> None:
         """
-        Deletes an event if no seats have been booked.
+        Deletes an event if no seats have been booked and caller owns the event.
         """
         event = await self.repository.get_by_id(event_id)
         if not event:
             raise EntityNotFoundException(entity_name="Event", entity_id=event_id)
+
+        # Enforce organizer ownership
+        if current_user and current_user.role != "admin":
+            if event.organizer_id is not None and event.organizer_id != current_user.id:
+                raise AuthorizationException(
+                    message="You do not have permission to delete this event because you are not its organizer.",
+                    code="NOT_EVENT_OWNER",
+                )
 
         booked_seats = event.total_capacity - event.available_capacity
         if booked_seats > 0:

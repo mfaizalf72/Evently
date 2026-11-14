@@ -4,6 +4,42 @@ All notable changes to the **Evently** project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-11-14 - Phase 2 Milestone (V3–V4): Authentication & Role-Based Authorization
+
+### Added
+- **User SQLAlchemy Model (`app/models/user.py`)**:
+  - UUID primary key, timestamp mixin, normalized unique email, bcrypt password hash, display name, role (`organizer`, `customer`, `admin`), active status.
+  - One-to-many relationship linking `User` (Organizer) with `Event`.
+- **Event Ownership Schema (`app/models/event.py`)**:
+  - Added `organizer_id` foreign key column referencing `users.id` with `ON DELETE CASCADE`.
+- **Cryptographic Security Engine (`app/core/security.py`)**:
+  - Salted password hashing and constant-time password verification via `bcrypt`.
+  - Cryptographically signed JWT token generation (`create_access_token`, `create_refresh_token`) and verification (`decode_token`) via `pyjwt`.
+- **Authentication & RBAC Dependencies (`app/api/deps.py`)**:
+  - `OAuth2PasswordBearer` scheme integrated with Swagger UI.
+  - `get_current_user` resolving active authenticated user from Bearer tokens.
+  - Role-based authorization guards: `require_role`, `get_current_organizer`, and `get_current_admin`.
+- **Authentication Schemas (`app/schemas/user.py` & `app/schemas/token.py`)**:
+  - Pydantic v2 schemas: `UserCreate`, `UserLogin`, `UserResponse`, `Token`, `RefreshTokenRequest`.
+  - Enforced password length (min 8 chars) and email format validation.
+- **Auth REST Endpoints (`app/api/v1/endpoints/auth.py`)**:
+  - `POST /api/v1/auth/register` (Register new user with hashed password - 201 Created).
+  - `POST /api/v1/auth/login` (Authenticate credentials and issue JWT access & refresh tokens - 200 OK).
+  - `POST /api/v1/auth/refresh` (Exchange valid refresh token for fresh access token - 200 OK).
+  - `GET /api/v1/auth/me` (Retrieve current authenticated user profile - 200 OK).
+- **Protected Event Endpoints & Ownership Verification**:
+  - Event mutation routes (`POST`, `PUT`, `DELETE` in `app/api/v1/endpoints/events.py`) protected by `get_current_organizer`.
+  - Service-level ownership checks preventing organizers from altering or deleting events created by other organizers.
+  - Event discovery endpoints (`GET /events`, `GET /events/{id}`) remain public for event attendees.
+- **Alembic Migration (`9e4cbe9cb799_create_users_table_and_add_organizer_to_.py`)**:
+  - Created `users` table with unique email index and added foreign key `fk_events_organizer_id_users` to `events`.
+- **Automated Test Suite (40/40 Passing)**:
+  - Cryptographic security unit tests (`tests/unit/test_security.py`).
+  - User registration & login schema unit tests (`tests/unit/test_user_schemas.py`).
+  - Authentication API integration tests (`tests/integration/test_auth_api.py`).
+  - RBAC and event ownership authorization integration tests (`tests/integration/test_event_authorization.py`).
+  - Upgraded Event CRUD integration tests (`tests/integration/test_events_api.py`) with authenticated test fixtures.
+
 ## [0.2.0] - 2026-11-12 - V2 Milestone: Event Data Model & CRUD APIs
 
 ### Added
