@@ -5,7 +5,7 @@ Represents community events, workshops, and gatherings with database-level capac
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING
 import uuid
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
@@ -15,6 +15,7 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
     from app.models.user import User
+    from app.models.ticket_tier import TicketTier
 
 
 class Event(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -77,6 +78,13 @@ class Event(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     organizer: Mapped[Optional["User"]] = relationship(
         "User",
         back_populates="events",
+        lazy="selectin",
+    )
+
+    ticket_tiers: Mapped[List["TicketTier"]] = relationship(
+        "TicketTier",
+        back_populates="event",
+        cascade="all, delete-orphan",
         lazy="selectin",
     )
 

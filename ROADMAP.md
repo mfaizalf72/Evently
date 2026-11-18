@@ -32,7 +32,7 @@ Status designations:
 
 | Version | Milestone | Description | Status |
 | :--- | :--- | :--- | :--- |
-| **V5** | **Ticket Tier & Inventory Management** | Ticket tier model (VIP, General, Early Bird), pricing, seat allocation, and aggregate event capacity management. | NOT STARTED |
+| **V5** | **Ticket Tier & Inventory Management** | Ticket tier model (VIP, General, Early Bird), pricing, seat allocation, and aggregate event capacity management. | **COMPLETED** |
 | **V6** | **Race-Condition-Proof Booking Engine** | High-concurrency seat reservation engine using PostgreSQL atomic conditional updates, `SELECT FOR UPDATE` row-level locks, and database check constraints to eliminate overbooking. | NOT STARTED |
 | **V7** | **Idempotency & Reservation Expiration** | Idempotency keys for booking requests, temporary seat holds with automatic background expiration for unpaid orders. | NOT STARTED |
 | **V8** | **Payment Integration & Webhook Verification** | Payment provider integration (Stripe/mock gateway), cryptographic webhook signature verification, atomic order state transitions from reserved to confirmed. | NOT STARTED |

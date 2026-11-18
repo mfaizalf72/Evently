@@ -4,6 +4,37 @@ All notable changes to the **Evently** project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-11-18 - V5 Milestone: Ticket Tier & Inventory Management
+
+### Added
+- **TicketTier SQLAlchemy Model (`app/models/ticket_tier.py`)**:
+  - UUID primary key, timestamp mixin, `event_id` foreign key with `CASCADE` delete.
+  - Tier attributes: `name`, `description`, `price`, `total_capacity`, and `available_capacity`.
+  - Database check constraints: `price >= 0`, `total_capacity > 0`, and `available_capacity >= 0 AND available_capacity <= total_capacity`.
+  - Unique composite constraint on `(event_id, name)` preventing duplicate tier names within the same event.
+  - Linked bidirectionally with `Event` model via `Event.ticket_tiers` with `selectin` eager loading.
+- **Pydantic v2 TicketTier Schemas (`app/schemas/ticket_tier.py`)**:
+  - `TicketTierCreate`, `TicketTierUpdate`, `TicketTierResponse`, `TicketTierListResponse`.
+  - Field-level whitespace stripping, non-negative price, and positive capacity validators.
+- **Repository Pattern (`app/repositories/ticket_tier_repository.py`)**:
+  - `TicketTierRepository` with queries for listing by event, querying by ID, case-insensitive name matching, and aggregate allocated capacity calculation.
+- **Service Layer & Capacity Invariants (`app/services/ticket_tier_service.py`)**:
+  - Enforced aggregate capacity invariant: sum of tier capacities cannot exceed parent event's total capacity (`TIER_CAPACITY_EXCEEDS_EVENT`).
+  - Enforced uniqueness: duplicate tier names under the same event rejected (`TIER_NAME_ALREADY_EXISTS`).
+  - Organizer ownership verification on tier creation, modification, and deletion (`NOT_EVENT_OWNER`).
+  - Tier deletion guard preventing deletion of tiers with booked seats.
+- **Ticket Tier REST Endpoints (`app/api/v1/endpoints/ticket_tiers.py`)**:
+  - `POST /api/v1/events/{event_id}/tiers` (Add Ticket Tier - 201 Created, requires Organizer ownership).
+  - `GET /api/v1/events/{event_id}/tiers` (List Tiers with capacity metrics - 200 OK, Public).
+  - `GET /api/v1/events/{event_id}/tiers/{tier_id}` (Get Tier Details - 200 OK, Public).
+  - `PUT /api/v1/events/{event_id}/tiers/{tier_id}` (Update Tier - 200 OK, requires Organizer ownership).
+  - `DELETE /api/v1/events/{event_id}/tiers/{tier_id}` (Delete Tier - 204 No Content, requires Organizer ownership).
+- **Alembic Migration (`dcd0ed278d55_create_ticket_tiers_table.py`)**:
+  - Applied schema migration creating `ticket_tiers` table with foreign keys, unique constraint, check constraints, and indexes.
+- **Automated Test Suite (54/54 Passing)**:
+  - Unit tests for schema validation (`tests/unit/test_ticket_tier_schemas.py`).
+  - Integration tests covering tier CRUD lifecycle, capacity limit rejection, duplicate rejection, and RBAC ownership guards (`tests/integration/test_ticket_tiers_api.py`).
+
 ## [0.3.0] - 2026-11-14 - Phase 2 Milestone (V3–V4): Authentication & Role-Based Authorization
 
 ### Added
