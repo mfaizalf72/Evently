@@ -4,8 +4,19 @@ Central registry of all SQLAlchemy ORM models.
 """
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.booking import Booking, BookingItem, BookingStatus
 from app.models.event import Event
 from app.models.ticket_tier import TicketTier
 from app.models.user import User
 
-__all__ = ["Base", "TimestampMixin", "UUIDPrimaryKeyMixin", "Event", "TicketTier", "User"]
+__all__ = [
+    "Base",
+    "TimestampMixin",
+    "UUIDPrimaryKeyMixin",
+    "Booking",
+    "BookingItem",
+    "BookingStatus",
+    "Event",
+    "TicketTier",
+    "User",
+]

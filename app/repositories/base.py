@@ -30,7 +30,6 @@ class BaseRepository(Generic[ModelType]):
         """Persist a new entity to the database."""
         self.db.add(entity)
         await self.db.flush()
-        await self.db.refresh(entity)
         return entity
 
     async def update(self, entity: ModelType) -> ModelType:

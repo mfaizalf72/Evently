@@ -4,6 +4,40 @@ All notable changes to the **Evently** project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-11-19 - V6 Milestone: Race-Condition-Proof Booking Engine
+
+### Added
+- **Booking & BookingItem SQLAlchemy Models (`app/models/booking.py`)**:
+  - `BookingStatus` enum: `PENDING`, `CONFIRMED`, `CANCELLED`, `EXPIRED`.
+  - `Booking`: UUID primary key, `event_id`, `user_id` (foreign keys with `CASCADE`), `status`, `total_amount`, `idempotency_key`, `expires_at`, and timestamp mixin.
+  - `BookingItem`: UUID primary key, `booking_id`, `ticket_tier_id`, `quantity`, `unit_price`, `subtotal`.
+  - Database-level check constraints: `total_amount >= 0`, `quantity > 0`, `unit_price >= 0`, `subtotal >= 0`.
+  - Unique composite index on `(user_id, idempotency_key)` preventing duplicate submission.
+- **Pydantic v2 Booking Schemas (`app/schemas/booking.py`)**:
+  - `BookingCreate`, `BookingItemCreate`, `BookingResponse`, `BookingItemResponse`, `BookingListResponse`.
+  - Strict payload validation: non-empty items array, positive quantities (max 10 seats per tier per booking).
+- **PostgreSQL Atomic Concurrency Control (`app/repositories/booking_repository.py`)**:
+  - `atomic_reserve_tier_capacity`: Atomic SQL `UPDATE ticket_tiers SET available_capacity = available_capacity - :qty WHERE id = :id AND available_capacity >= :qty RETURNING id;` leveraging PostgreSQL row-level locks.
+  - `atomic_release_tier_capacity`: Atomic replenishment SQL `UPDATE ticket_tiers SET available_capacity = available_capacity + :qty WHERE id = :id;`
+  - Dual-level capacity synchronization ensuring parent `Event.available_capacity` and `TicketTier.available_capacity` remain atomic and identical.
+- **Booking Service Layer (`app/services/booking_service.py`)**:
+  - Idempotency guard: duplicate requests with identical `idempotency_key` return the existing booking idempotently.
+  - Immediate auto-confirmation for free events (total amount = 0 -> `CONFIRMED`).
+  - 15-minute pending hold window (`expires_at = now + 15m`) for paid events.
+  - User cancellation workflow (`cancel_booking`): atomically restores seat inventory to both tier and parent event.
+  - Multi-tier seat reservation rollback: if reserving tier B fails after reserving tier A, tier A's inventory is instantly restored in the same transaction.
+- **Booking REST Endpoints (`app/api/v1/endpoints/bookings.py`)**:
+  - `POST /api/v1/events/{event_id}/bookings`: Reserve tickets under high concurrency (Customer authenticated).
+  - `GET /api/v1/bookings/my-bookings`: List customer's booking history (Customer authenticated).
+  - `GET /api/v1/events/{event_id}/bookings`: List all attendees and bookings for an event (Organizer/Admin only).
+  - `GET /api/v1/bookings/{booking_id}`: Retrieve detailed booking information (Owner/Organizer/Admin).
+  - `POST /api/v1/bookings/{booking_id}/cancel`: Cancel booking and release held inventory.
+- **Alembic Migration (`efe4b5e69207_create_bookings_and_booking_items_tables.py`)**:
+  - Applied schema migration creating `bookings` and `booking_items` tables with check constraints, foreign keys, and indexes.
+- **Automated Concurrency & Unit Test Suite (66/66 Passing)**:
+  - Integration tests for standard booking flows (`tests/integration/test_bookings_api.py`).
+  - Concurrency stress tests (`tests/integration/test_concurrency_bookings.py`): verified simultaneous requests competing for the exact last seat with zero overbooking and 100% database constraint adherence.
+
 ## [0.4.0] - 2026-11-18 - V5 Milestone: Ticket Tier & Inventory Management
 
 ### Added

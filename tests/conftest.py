@@ -64,7 +64,7 @@ def clean_tables_between_tests():
     """
     yield
     with test_sync_engine.begin() as conn:
-        conn.execute(text("TRUNCATE TABLE ticket_tiers, events, users RESTART IDENTITY CASCADE;"))
+        conn.execute(text("TRUNCATE TABLE booking_items, bookings, ticket_tiers, events, users RESTART IDENTITY CASCADE;"))
 
 
 @pytest.fixture
@@ -82,12 +82,20 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest.fixture
-async def async_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+async def async_client() -> AsyncGenerator[AsyncClient, None]:
     """
-    Provides an unauthenticated AsyncClient bound to the FastAPI application with get_db overridden.
+    Provides an unauthenticated AsyncClient bound to the FastAPI application with get_db overridden
+    to use isolated sessions from TestAsyncSessionLocal per request (thread-safe for concurrent tests).
     """
     async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
-        yield db_session
+        async with TestAsyncSessionLocal() as session:
+            try:
+                yield session
+            except Exception:
+                await session.rollback()
+                raise
+            finally:
+                await session.close()
 
     app.dependency_overrides[get_db] = override_get_db
 
