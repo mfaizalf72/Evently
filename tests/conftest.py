@@ -15,6 +15,10 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.core.config import settings
+
+# Disable automatic background expiration worker during tests for deterministic control
+settings.ENABLE_EXPIRATION_WORKER = False
+
 from app.core.security import create_access_token, hash_password
 from app.database.session import get_db
 from app.main import app

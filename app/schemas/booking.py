@@ -40,7 +40,7 @@ class BookingResponse(BaseModel):
     id: uuid.UUID = Field(..., description="Unique booking identifier")
     customer_id: uuid.UUID = Field(..., description="Customer who placed the booking")
     event_id: uuid.UUID = Field(..., description="Target event identifier")
-    status: str = Field(..., description="Current booking status (pending, confirmed, cancelled)")
+    status: str = Field(..., description="Current booking status (pending, confirmed, cancelled, expired)")
     total_amount: Decimal = Field(..., description="Total order amount")
     idempotency_key: Optional[str] = Field(None, description="Client idempotency key")
     expires_at: Optional[datetime] = Field(None, description="Expiration timestamp for pending orders")
@@ -58,3 +58,10 @@ class BookingListResponse(BaseModel):
     page: int = Field(..., ge=1, description="Current page number")
     page_size: int = Field(..., ge=1, description="Number of items per page")
     total_pages: int = Field(..., ge=0, description="Total pages available")
+
+
+class BookingExpirationSweepResponse(BaseModel):
+    """Response payload detailing the outcome of an expiration sweep."""
+    expired_bookings_count: int = Field(..., description="Number of expired pending bookings transitioned to EXPIRED")
+    released_seats_count: int = Field(..., description="Total seats replenished to ticket tier and event capacities")
+    message: str = Field(..., description="Summary message")

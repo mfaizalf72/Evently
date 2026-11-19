@@ -4,13 +4,14 @@ Data access implementation for Bookings featuring PostgreSQL atomic conditional 
 to guarantee race-condition-proof inventory reservations.
 """
 
+from datetime import datetime
 from typing import List, Optional, Tuple
 import uuid
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.booking import Booking, BookingItem
+from app.models.booking import Booking, BookingItem, BookingStatus
 from app.models.event import Event
 from app.models.ticket_tier import TicketTier
 from app.repositories.base import BaseRepository
@@ -173,3 +174,28 @@ class BookingRepository(BaseRepository[Booking]):
         )
         result = await self.db.execute(stmt)
         return list(result.scalars().all()), total
+
+    async def get_expired_pending_bookings(
+        self,
+        now: datetime,
+        limit: int = 100,
+    ) -> List[Booking]:
+        """
+        Retrieves pending bookings that have passed their expires_at timestamp.
+        Uses with_for_update(skip_locked=True) to allow concurrent worker sweeps
+        without lock contention or deadlocks.
+        """
+        stmt = (
+            select(Booking)
+            .where(
+                Booking.status == BookingStatus.PENDING.value,
+                Booking.expires_at <= now,
+            )
+            .options(
+                selectinload(Booking.items),
+            )
+            .with_for_update(skip_locked=True)
+            .limit(limit)
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())

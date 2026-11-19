@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # Booking & Inventory Reservation Settings
+    BOOKING_HOLD_MINUTES: int = 15
+    BOOKING_EXPIRATION_SWEEP_INTERVAL_SECONDS: int = 60
+    ENABLE_EXPIRATION_WORKER: bool = True
+
     @computed_field
     @property
     def async_database_url(self) -> str:

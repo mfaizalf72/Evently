@@ -7,10 +7,11 @@ and customer order lifecycle management.
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import math
-from typing import List, Optional
+from typing import List, Optional, Tuple
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.exceptions import (
     AuthorizationException,
     BusinessRuleViolationException,
@@ -80,6 +81,23 @@ class BookingService:
         if data.idempotency_key:
             existing = await self.booking_repo.get_by_idempotency_key(data.idempotency_key)
             if existing:
+                if existing.customer_id != customer.id:
+                    raise BusinessRuleViolationException(
+                        message="Idempotency key was already used by another customer.",
+                        code="IDEMPOTENCY_KEY_COLLISION",
+                    )
+                if existing.event_id != event_id:
+                    raise BusinessRuleViolationException(
+                        message="Idempotency key was previously used for a different event.",
+                        code="IDEMPOTENCY_CONFLICT",
+                    )
+                existing_items_map = {item.ticket_tier_id: item.quantity for item in existing.items}
+                requested_items_map = {item.ticket_tier_id: item.quantity for item in data.items}
+                if existing_items_map != requested_items_map:
+                    raise BusinessRuleViolationException(
+                        message="Idempotency key was previously used with different booking items.",
+                        code="IDEMPOTENCY_CONFLICT",
+                    )
                 return self._to_response(existing)
 
         # 2. Event Validation
@@ -150,7 +168,7 @@ class BookingService:
                 expires_at = None
             else:
                 initial_status = BookingStatus.PENDING.value
-                expires_at = now + timedelta(minutes=15)
+                expires_at = now + timedelta(minutes=settings.BOOKING_HOLD_MINUTES)
 
             booking = Booking(
                 customer_id=customer.id,
@@ -180,11 +198,35 @@ class BookingService:
         current_user: User,
     ) -> BookingResponse:
         """
-        Retrieves booking details with ownership verification.
+        Retrieves booking details with ownership verification and lazy expiration check.
         """
         booking = await self.booking_repo.get_by_id(booking_id)
         if not booking:
             raise EntityNotFoundException(entity_name="Booking", entity_id=booking_id)
+
+        # Lazy expiration check: automatically expire pending orders past their expiration deadline
+        now = datetime.now(timezone.utc)
+        if (
+            booking.status == BookingStatus.PENDING.value
+            and booking.expires_at is not None
+            and booking.expires_at <= now
+        ):
+            event_seats = 0
+            for item in booking.items:
+                await self.booking_repo.atomic_release_tier_capacity(
+                    tier_id=item.ticket_tier_id,
+                    quantity=item.quantity,
+                )
+                event_seats += item.quantity
+
+            await self.booking_repo.atomic_release_event_capacity(
+                event_id=booking.event_id,
+                quantity=event_seats,
+            )
+
+            booking.status = BookingStatus.EXPIRED.value
+            await self.db.commit()
+            booking = await self.booking_repo.get_by_id(booking_id)
 
         # Authorization: Customer, Event Organizer, or Admin
         is_owner = booking.customer_id == current_user.id
@@ -283,10 +325,10 @@ class BookingService:
                 code="FORBIDDEN_BOOKING_CANCEL",
             )
 
-        if booking.status == BookingStatus.CANCELLED.value:
+        if booking.status in (BookingStatus.CANCELLED.value, BookingStatus.EXPIRED.value):
             raise BusinessRuleViolationException(
-                message="Booking is already cancelled.",
-                code="ALREADY_CANCELLED",
+                message=f"Booking is already {booking.status}.",
+                code="ALREADY_INACTIVE",
             )
 
         # Atomically restore capacity for each item
@@ -309,3 +351,47 @@ class BookingService:
 
         full_booking = await self.booking_repo.get_by_id(booking_id)
         return self._to_response(full_booking)
+
+    async def expire_pending_bookings(
+        self,
+        batch_size: int = 100,
+        now: Optional[datetime] = None,
+    ) -> Tuple[int, int]:
+        """
+        Sweeps expired pending bookings using row-level locking (SKIP LOCKED),
+        marks them EXPIRED, and atomically replenishes capacity to tiers and events.
+        Returns a tuple of (expired_bookings_count, released_seats_count).
+        """
+        if now is None:
+            now = datetime.now(timezone.utc)
+
+        expired_bookings = await self.booking_repo.get_expired_pending_bookings(
+            now=now,
+            limit=batch_size,
+        )
+
+        total_expired_count = 0
+        total_seats_released = 0
+
+        for booking in expired_bookings:
+            event_seats = 0
+            for item in booking.items:
+                await self.booking_repo.atomic_release_tier_capacity(
+                    tier_id=item.ticket_tier_id,
+                    quantity=item.quantity,
+                )
+                event_seats += item.quantity
+
+            await self.booking_repo.atomic_release_event_capacity(
+                event_id=booking.event_id,
+                quantity=event_seats,
+            )
+
+            booking.status = BookingStatus.EXPIRED.value
+            total_expired_count += 1
+            total_seats_released += event_seats
+
+        if total_expired_count > 0:
+            await self.db.commit()
+
+        return total_expired_count, total_seats_released

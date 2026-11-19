@@ -4,6 +4,29 @@ All notable changes to the **Evently** project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-11-19 - V7 Milestone: Idempotency & Reservation Expiration
+
+### Added
+- **RFC/Stripe-Compliant Header-Based Idempotency**:
+  - Supported `Idempotency-Key` HTTP request header alongside body field `idempotency_key` on `POST /api/v1/events/{event_id}/bookings`.
+  - Idempotency conflict detection: safely rejects key reuse across different events or modified line item payloads with `IDEMPOTENCY_CONFLICT`.
+  - Customer ownership boundary: prevents key collision/hijacking across distinct users (`IDEMPOTENCY_KEY_COLLISION`).
+  - Safe re-submission: identical payload retries return the existing booking order without creating duplicate records or double-deducting inventory.
+- **PostgreSQL Row-Level Locked Expiration Sweeper (`app/repositories/booking_repository.py`)**:
+  - `get_expired_pending_bookings`: Implemented `SELECT ... WHERE status = 'pending' AND expires_at <= :now FOR UPDATE SKIP LOCKED LIMIT :limit`.
+  - Guaranteed deadlock-free and contention-free concurrent worker sweeps across multi-replica or multi-process deployments.
+- **Automatic Multi-Tier Inventory Replenishment (`app/services/booking_service.py`)**:
+  - `expire_pending_bookings`: Iterates over expired reservations, marks status as `EXPIRED`, and atomically restores held capacity to both `ticket_tiers.available_capacity` and `events.available_capacity`.
+  - Configurable expiration window: replaced hardcoded hold time with `settings.BOOKING_HOLD_MINUTES` (default 15 minutes).
+- **On-Demand Lazy Expiration**:
+  - `get_booking_by_id`: Automatically evaluates pending orders upon inspection; if `expires_at <= now`, on-the-fly transitions status to `EXPIRED` and restores capacity immediately.
+- **Dedicated Expiration Sweep Endpoint (`app/api/v1/endpoints/bookings.py`)**:
+  - `POST /api/v1/bookings/expire-pending`: Provides an administrative / cron / n8n-compatible trigger returning `BookingExpirationSweepResponse` with counts of expired bookings and replenished seats.
+- **FastAPI Lifespan Background Expiration Worker (`app/main.py`)**:
+  - Asynchronous background task loop `_booking_expiration_worker` periodically sweeping expired reservations every `settings.BOOKING_EXPIRATION_SWEEP_INTERVAL_SECONDS` (default 60s) with graceful shutdown cancellation.
+- **Automated Integration Test Suite (71/71 Passing)**:
+  - Added `tests/integration/test_idempotency_and_expiration.py` covering header-based idempotency, conflict detection, background sweep, lazy inspection expiration, and inactive cancellation guards.
+
 ## [0.5.0] - 2026-11-19 - V6 Milestone: Race-Condition-Proof Booking Engine
 
 ### Added

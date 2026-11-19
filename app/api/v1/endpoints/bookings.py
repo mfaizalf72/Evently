@@ -6,7 +6,7 @@ event roster management, and order cancellation.
 
 from typing import Optional
 import uuid
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Header, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_active_user
@@ -14,6 +14,7 @@ from app.database.session import get_db
 from app.models.user import User
 from app.schemas.booking import (
     BookingCreate,
+    BookingExpirationSweepResponse,
     BookingListResponse,
     BookingResponse,
 )
@@ -31,14 +32,20 @@ def get_booking_service(db: AsyncSession = Depends(get_db)) -> BookingService:
     response_model=BookingResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Reserve Tickets",
-    description="Atomically reserves tickets for an event. Guaranteed race-condition proof.",
+    description="Atomically reserves tickets for an event. Guaranteed race-condition proof with idempotency.",
 )
 async def create_booking(
     event_id: uuid.UUID,
     payload: BookingCreate,
+    idempotency_key_header: Optional[str] = Header(None, alias="Idempotency-Key"),
     current_user: User = Depends(get_current_active_user),
     service: BookingService = Depends(get_booking_service),
 ) -> BookingResponse:
+    # Header takes priority over body if provided
+    idempotency_key = idempotency_key_header or payload.idempotency_key
+    if idempotency_key:
+        payload.idempotency_key = idempotency_key
+
     return await service.reserve_booking(
         customer=current_user,
         event_id=event_id,
@@ -121,4 +128,24 @@ async def cancel_booking(
     return await service.cancel_booking(
         booking_id=booking_id,
         current_user=current_user,
+    )
+
+
+@router.post(
+    "/bookings/expire-pending",
+    response_model=BookingExpirationSweepResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Expire Stale Pending Reservations",
+    description="Sweeps all pending reservations past their expiration deadline, transitions them to EXPIRED, and releases reserved capacity.",
+)
+async def expire_pending_bookings(
+    batch_size: int = Query(100, ge=1, le=500, description="Max bookings to process in this sweep batch"),
+    current_user: User = Depends(get_current_active_user),
+    service: BookingService = Depends(get_booking_service),
+) -> BookingExpirationSweepResponse:
+    expired_count, released_seats = await service.expire_pending_bookings(batch_size=batch_size)
+    return BookingExpirationSweepResponse(
+        expired_bookings_count=expired_count,
+        released_seats_count=released_seats,
+        message=f"Processed {expired_count} expired pending bookings and replenished {released_seats} seats.",
     )

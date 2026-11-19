@@ -24,7 +24,8 @@ class BookingStatus(str, Enum):
     """Lifecycle states for a booking order."""
     PENDING = "pending"          # Reserved, awaiting payment
     CONFIRMED = "confirmed"      # Payment verified or complimentary event
-    CANCELLED = "cancelled"      # Cancelled by user or expired
+    CANCELLED = "cancelled"      # Cancelled by user
+    EXPIRED = "expired"          # Reservation hold timed out without payment
     REFUNDED = "refunded"        # Fully refunded
 
 
