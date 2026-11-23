@@ -51,6 +51,13 @@ class Settings(BaseSettings):
     BOOKING_EXPIRATION_SWEEP_INTERVAL_SECONDS: int = 60
     ENABLE_EXPIRATION_WORKER: bool = True
 
+    # Payment & Webhook Configuration
+    PAYMENT_PROVIDER: str = "mock"  # "mock" or "stripe"
+    STRIPE_SECRET_KEY: str = "sk_test_mock_evently_secret_key"
+    STRIPE_PUBLISHABLE_KEY: str = "pk_test_mock_evently_pub_key"
+    PAYMENT_WEBHOOK_SECRET: str = "whsec_mock_evently_webhook_signing_secret_2026"
+    WEBHOOK_TOLERANCE_SECONDS: int = 300
+
     @computed_field
     @property
     def async_database_url(self) -> str:

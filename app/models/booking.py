@@ -16,6 +16,7 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
     from app.models.event import Event
+    from app.models.payment import Payment
     from app.models.ticket_tier import TicketTier
     from app.models.user import User
 
@@ -81,6 +82,12 @@ class Booking(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     items: Mapped[List["BookingItem"]] = relationship(
         "BookingItem",
+        back_populates="booking",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    payments: Mapped[List["Payment"]] = relationship(
+        "Payment",
         back_populates="booking",
         cascade="all, delete-orphan",
         lazy="selectin",

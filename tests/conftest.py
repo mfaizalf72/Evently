@@ -68,7 +68,7 @@ def clean_tables_between_tests():
     """
     yield
     with test_sync_engine.begin() as conn:
-        conn.execute(text("TRUNCATE TABLE booking_items, bookings, ticket_tiers, events, users RESTART IDENTITY CASCADE;"))
+        conn.execute(text("TRUNCATE TABLE webhook_events, payments, booking_items, bookings, ticket_tiers, events, users RESTART IDENTITY CASCADE;"))
 
 
 @pytest.fixture

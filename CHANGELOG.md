@@ -4,6 +4,36 @@ All notable changes to the **Evently** project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-11-23 - V8 Milestone: Payment Integration & Webhook Verification
+
+### Added
+- **Payment & WebhookEvent SQLAlchemy Models (`app/models/payment.py`)**:
+  - `Payment`: UUID primary key, `booking_id` foreign key with `CASCADE`, `provider`, `provider_payment_intent_id` (unique, indexed), non-negative `amount`, `currency`, `status` (`pending`, `succeeded`, `failed`, `refunded`), `client_secret`, and timestamps.
+  - `WebhookEvent`: UUID primary key, `provider_event_id` (unique, indexed), `event_type`, raw `payload`, `status` (`PENDING`, `PROCESSED`, `IGNORED`), `processed_at`, and timestamps.
+  - Linked bidirectional eager relationship with `Booking.payments`.
+- **Payment Provider Gateway Abstraction (`app/integrations/payment/`)**:
+  - `PaymentGateway` abstract base class defining `create_payment_intent` and `verify_webhook_signature`.
+  - `StripePaymentGateway` implementing real/mock Stripe payment intent creation.
+  - Constant-time HMAC-SHA256 signature verification matching Stripe's specification (`t=<timestamp>,v1=<hash>`).
+  - Strict replay attack protection enforcing timestamp drift tolerance (`WEBHOOK_TOLERANCE_SECONDS = 300`).
+- **Payment Repository Layer (`app/repositories/payment_repository.py`)**:
+  - `PaymentRepository`: queries by external payment intent ID, queries by booking ID, and active pending intent lookup.
+  - `WebhookEventRepository`: external event deduplication lookup ensuring strict idempotency.
+- **Payment Service Layer (`app/services/payment_service.py`)**:
+  - `initiate_checkout`: Validates booking ownership, non-expiration, and non-cancelled state; returns reusable client secret and payment intent.
+  - `process_webhook`: Verifies HMAC signature, performs idempotent event deduplication, and coordinates atomic state transition:
+    - On `payment_intent.succeeded`: atomically marks `Payment.status = succeeded`, confirms `Booking.status = confirmed`, clears `Booking.expires_at = None`, and marks audit event `PROCESSED`.
+    - On `payment_intent.payment_failed`: records failure without releasing held seats until expiration or retry.
+- **Payment REST Endpoints (`app/api/v1/endpoints/payments.py`)**:
+  - `POST /api/v1/payments/checkout/{booking_id}`: Initiates checkout session (authenticated customer/owner).
+  - `POST /api/v1/payments/webhook`: Webhook endpoint cryptographically validated via `Stripe-Signature` or `X-Signature`.
+  - `GET /api/v1/payments/{payment_id}`: Retrieves payment details with ownership authorization check.
+- **Alembic Migration (`1c80f17b4381_create_payments_and_webhook_events_.py`)**:
+  - Generated and applied schema migration for `payments` and `webhook_events` tables with constraints and indexes.
+- **Automated Test Suite (84/84 Passing)**:
+  - Unit tests verifying HMAC signature calculation, tampered payload rejection, wrong secret rejection, and replay tolerance (`tests/unit/test_payment_signatures.py`).
+  - Integration tests verifying checkout flow, authorization guards, webhook order confirmation, webhook retry idempotency, failure recording, and signature security (`tests/integration/test_payments_api.py`).
+
 ## [0.6.0] - 2026-11-19 - V7 Milestone: Idempotency & Reservation Expiration
 
 ### Added
